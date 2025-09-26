@@ -1,0 +1,107 @@
+create database Messho_sales;
+use Messho_sales;
+create	table  sales(
+Customer_id int,
+Customer_Name varchar(50),
+Region Varchar(50),
+Sales_Amount decimal(10,2),
+discount int,
+Profit_Percent int
+);
+select* from sales;
+alter table sales
+add Loss int;
+ALTER TABLE sales MODIFY Customer_id VARCHAR(20);
+ALTER TABLE sales MODIFY Sales_Amount DECIMAL(10,2) NULL;
+TRUNCATE TABLE sales;
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.4/Uploads/sales.csv'
+INTO TABLE sales
+FIELDS TERMINATED BY ',' 
+ENCLOSED BY '"' 
+LINES TERMINATED BY '\r\n'
+IGNORE 1 ROWS
+(Customer_id, Customer_Name, Region, @Sales_Amount, @discount, @Profit_percent, @Loss)
+SET 
+    Sales_Amount   = NULLIF(@Sales_Amount, ''),
+    discount       = NULLIF(@discount, ''),
+    Profit_percent = NULLIF(@Profit_percent, ''),
+    Loss           = NULLIF(@Loss, '');
+   --  Find total sales amount
+select sum(Sales_amount) as total_sales
+from Sales;
+-- Find average discount given-- 
+select avg(discount) as Avg_Discount
+from sales;
+-- Count how many rows have NULL sales amount
+select count(*) as Null_sales
+from sales
+where Sales_amount IS NULL;
+-- Show customers with Sales greater than 1000
+ select Customer_Name, Sales_amount
+ from sales
+ where Sales_Amount>1000;
+-- Group total sales by Region
+select Region, sum(sales_amount) as total_sales
+from sales
+group by Region;
+-- Find top 3 customers with highest sales
+select  Customer_Name, Sales_amount
+from sales
+order by Sales_amount desc
+limit 3;
+-- Calculate Profit in Rupees (Profit = Sales * Profit_percent / 100)
+select Customer_Name,
+Sales_amount,
+Profit_Percent,
+(Sales_amount*Profit_Percent/100) as Profit_in_Rs
+from sales;
+-- Find total Loss amount (ignoring NULL sales)
+select sum(Loss) as total_Loss
+from sales;
+-- Find region with maximum sales
+select Region, sum(Sales_amount) as total_sales
+from sales
+group by Region
+order by total_sales desc
+limit 2;
+-- Highest profit customer in each region 
+SELECT Customer_Name,Region, Sales_amount, Profit_Percent,
+(coalesce(Sales_amount,0)*coalesce(Profit_Percent,0)/100) as Profit_in_Rs
+from(
+SELECT Customer_Name,Region, Sales_amount, Profit_Percent,
+rank() over(partition by Region order by( coalesce(Sales_amount,0)*coalesce(Profit_Percent,0)/100)desc) as rnk
+from sales
+)
+t where rnk =4;
+-- Detect customers with negative profit (loss cases)
+select Customer_Name,Sales_amount,Profit_Percent,
+(sales_amount*Profit_Percent/100) as Profit_In_Rs
+from sales
+where  (sales_amount*Profit_Percent/100)<0;
+-- Find top 5% customers by sales
+Select Customer_Name, Sales_amount
+from(
+Select Customer_Name, Sales_amount,
+cume_dist()over(order by Sales_amount desc) as Sales_Percentile
+from sales
+)t where sales_Percentile <=0.05;
+-- Region-wise sales contribution %
+select Region,
+       round(sum(Sales_amount) * 100.0 / (select sum(Sales_amount) from sales), 2) as Contribution_Percent
+from sales
+group by Region
+order by Contribution_Percent desc;
+-- Find duplicate customers (same name in multiple regions)
+Select Customer_Name, count(distinct Region) as Region_count
+from sales
+group by Customer_Name
+having Region_Count>1;
+-- Correlation between Discount and Profit (basic check) postgre only run not in Mysql
+select corr(discount, Profit_Percent) as relation
+from sales;
+-- Show customers who contribute more than average sales of their region
+ select Customer_Name, Region, Sales_amount
+ from sales s
+ where Sales_amount >(
+ select avg (sales_amount) from sales
+ where Region = s. Region);
